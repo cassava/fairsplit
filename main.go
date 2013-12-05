@@ -1,3 +1,4 @@
+// Fairsplit is a program to split expenses among a group of people.
 package main
 
 import (
