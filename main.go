@@ -1,8 +1,17 @@
+// Copyright (c) 2013, Ben Morgan. All rights reserved.
+// Use of this source code is governed by an MIT license
+// that can be found in the LICENSE file.
+
 // Fairsplit is a program to split expenses among a group of people.
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
@@ -14,14 +23,6 @@ func main() {
 
 type graph map[string]map[string]float64
 
-const intro = `Please enter your finance graph here.
-
-	<Person> [Person...] <Sum> <Person> [Person...]
-
-Lines have the above format, where those left of the sum
-spend money on behalf of those to the right of the sum.
-`
-
 // buildGraphInteractively prints an introduction message and then proceeds to
 // take input from the standard input until EOF is encountered (which can be
 // inserted with Ctrl-D or Ctrl-Z, depending on OS.)
@@ -32,7 +33,7 @@ spend money on behalf of those to the right of the sum.
 //
 //	Please enter your finance graph here.
 //
-//		<Person> [Person...] <Sum> <Person> [Person...]
+//		<Person> <Sum> <Person> [Person...]
 //
 //	Lines have the above format, where those left of the sum
 //	spend money on behalf of those to the right of the sum.
@@ -49,11 +50,58 @@ spend money on behalf of those to the right of the sum.
 // in this process. It is not the job of buildGraphInteractively however, to
 // simplify the "graph". Let that be anothers job.
 func buildGraphInteractively() *graph {
-	fmt.Println(intro)
+	fmt.Println(`Please enter your finance graph here.
+
+	<Person> <Sum> <Person> [Person...]
+
+Lines have the above format, where those left of the sum
+spend money on behalf of those to the right of the sum.
+`)
+
 	g := make(graph)
 
 	// Implementation tip: use fmt.*Scan* functions.
+	r := bufio.NewReader(os.Stdin)
+	for {
+		// Get a line from the standard input
+		fmt.Print("> ")
+		line, err := r.ReadString('\n')
+		if err != nil && err != io.EOF {
+			fmt.Printf("error: %v\n", err)
+			break
+		}
 
+		// Check that we have enough information
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			if len(fields) > 0 {
+				fmt.Println("error: invalid format, ignoring line")
+			} else if err == io.EOF {
+				break
+			}
+			continue
+		}
+
+		// Assign the information to the correct entities
+		subj := fields[0]
+		obj := fields[2:]
+		amount, err := strconv.ParseFloat(fields[1], 64)
+		if err != nil {
+			fmt.Printf("error: cannot read number %q, ignoring line\n", fields[1])
+			continue
+		}
+		amount /= float64(len(obj) + 1)
+
+		// Put the information in the graph
+		for _, v := range obj {
+			if g[v] == nil {
+				g[v] = make(map[string]float64)
+			}
+			g[v][subj] += amount
+		}
+	}
+
+	fmt.Println()
 	return &g
 }
 
@@ -71,16 +119,14 @@ func simplifyGraph(g *graph) {
 	// It doesn't really change the way you write this function though.
 }
 
-const outro = `== OUTSTANDING TRANSACTIONS ============================================`
-
 // printTransactions iterates through the simplified graph and prints all
 // the edges contained in it as transactions from one person to another.
 func printTransactions(g *graph) {
-	fmt.Println(outro)
-	for subj, others := range g {
-		fmt.Fprint("%v must pay:\n", subj)
+	fmt.Println("\nOUTSTANDING TRANSACTIONS:")
+	for subj, others := range *g {
+		fmt.Printf("%v must pay:\n", subj)
 		for recv, sum := range others {
-			fmt.Fprint("    %v to %v\n", sum, recv)
+			fmt.Printf("    %.2f to %v\n", sum, recv)
 		}
 		fmt.Println()
 	}
