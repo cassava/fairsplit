@@ -17,7 +17,6 @@ import (
 func main() {
 	fmt.Println("Fairsplit – no one's cheating no one here.\n")
 	g := buildGraphInteractively()
-	simplifyGraph(g)
 	printTransactions(g)
 }
 
@@ -38,17 +37,12 @@ type graph map[string]map[string]float64
 //	Lines have the above format, where those left of the sum
 //	spend money on behalf of those to the right of the sum.
 //
-//	> Ben 45.67 Reed Tami
-//	> Reed 60.75 Ben Tami
-//	> Tami 33.20 Ben Reed
-//	> Ben 20.99 Tami
-//  > quit
-//	I do not understand 'quit'; ignoring.
+//	> Ben 45.67 Reed Sonia
+//	> Reed 60.75 Ben Sonia
+//	> Sonia 33.20 Ben Reed
+//	> Ben 20.99 Sonia
 //	> CTRL-D
 //
-// And then it should return the map[string]map[string]float64 that it created
-// in this process. It is not the job of buildGraphInteractively however, to
-// simplify the "graph". Let that be anothers job.
 func buildGraphInteractively() graph {
 	fmt.Println(`Please enter your finance graph here.
 
@@ -58,7 +52,7 @@ Lines have the above format, where those left of the sum
 spend money on behalf of those to the right of the sum.
 `)
 
-	g := make(graph)
+	amends := make(map[string]float64)
 
 	// Implementation tip: use fmt.*Scan* functions.
 	r := bufio.NewReader(os.Stdin)
@@ -84,57 +78,67 @@ spend money on behalf of those to the right of the sum.
 
 		// Assign the information to the correct entities
 		subj := fields[0]
-		obj := fields[2:]
+		others := fields[2:]
 		amount, err := strconv.ParseFloat(fields[1], 64)
 		if err != nil {
 			fmt.Printf("error: cannot read number %q, ignoring line\n", fields[1])
 			continue
 		}
-		amount /= float64(len(obj) + 1)
 
 		// Put the information in the graph
-		for _, v := range obj {
-			if g[v] == nil {
-				g[v] = make(map[string]float64)
-			}
-			g[v][subj] += amount
+		part := amount / float64(len(others)+1)
+		amends[subj] -= amount - part
+		for _, o := range others {
+			amends[o] += part
 		}
 	}
-
 	fmt.Println()
-	return g
-}
 
-// simplifyGraph simplifies the "graph" g so that the number of transactions
-// that need to take place is minimized.
-//
-// For example, if Ben owes Reed 12.00€, and Reed owes Ben 5.00€, then there
-// should only be one transaction, namely that of Ben paying Reed 7.00€.
-// Further simplifications should also be made, if possible; for example,
-// if Ben owes Reed 5.00€, and Sonia owes Ben 5.00, then Sonia should pay
-// Reed, because there is one less edge in the graph then.
-//
-// Edges in the graph that have a weight of 0.0 should be deleted from the
-// map, so that when we iterate over the map, we have the minimal number
-// of transactions right there.
-func simplifyGraph(g graph) {
-	// Make sure there is only ever one edge between two nodes
-	for subj, others := range g {
-		for recv, sum := range others {
-			if sum < g[recv][subj] {
-				g[recv][subj] -= sum
-				delete(g[subj], recv)
+	// Convert the amends data-structure to a graph
+	type obj struct {
+		k string  // key = name
+		v float64 // value = sum
+	}
+	gets := make([]obj, 0, len(amends))
+	puts := make([]obj, 0, len(amends))
+	for k, v := range amends {
+		if v < 0 {
+			gets = append(gets, obj{k, -v})
+		} else if v > 0 {
+			puts = append(puts, obj{k, v})
+		}
+	}
+
+	g := make(graph)
+	for i, j := 0, 0; i < len(puts); i++ {
+		put := &puts[i]
+		for put.v >= 0.01 {
+			if g[put.k] == nil {
+				g[put.k] = make(map[string]float64)
+			}
+
+			get := &gets[j]
+			if get.v > put.v {
+				g[put.k][get.k] = put.v
+				get.v -= put.v
+				put.v = 0
+			} else if get.v <= put.v {
+				g[put.k][get.k] = get.v
+				put.v -= get.v
+				get.v = 0
+				j++
 			}
 		}
 	}
 
-	// TODO: Try to remove edges if we can reroute the flow
+	return g
 }
 
 // printTransactions iterates through the simplified graph and prints all
 // the edges contained in it as transactions from one person to another.
 func printTransactions(g graph) {
 	fmt.Println("\nOUTSTANDING TRANSACTIONS:")
+
 	for subj, others := range g {
 		if len(others) == 0 {
 			continue
