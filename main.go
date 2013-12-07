@@ -38,9 +38,9 @@ type graph map[string]map[string]float64
 //	Lines have the above format, where those left of the sum
 //	spend money on behalf of those to the right of the sum.
 //
-//	> Ben 45.67 Lea Tami
-//	> Lea 60.75 Ben Tami
-//	> Tami 33.20 Ben Lea
+//	> Ben 45.67 Reed Tami
+//	> Reed 60.75 Ben Tami
+//	> Tami 33.20 Ben Reed
 //	> Ben 20.99 Tami
 //  > quit
 //	I do not understand 'quit'; ignoring.
@@ -49,7 +49,7 @@ type graph map[string]map[string]float64
 // And then it should return the map[string]map[string]float64 that it created
 // in this process. It is not the job of buildGraphInteractively however, to
 // simplify the "graph". Let that be anothers job.
-func buildGraphInteractively() *graph {
+func buildGraphInteractively() graph {
 	fmt.Println(`Please enter your finance graph here.
 
 	<Person> <Sum> <Person> [Person...]
@@ -102,28 +102,43 @@ spend money on behalf of those to the right of the sum.
 	}
 
 	fmt.Println()
-	return &g
+	return g
 }
 
 // simplifyGraph simplifies the "graph" g so that the number of transactions
 // that need to take place is minimized.
 //
-// For example, if Ben owes Lea 12.00€, and Lea owes Ben 5.00€, then there
-// should only be one transaction, namely that of Ben paying Lea 7.00€.
+// For example, if Ben owes Reed 12.00€, and Reed owes Ben 5.00€, then there
+// should only be one transaction, namely that of Ben paying Reed 7.00€.
+// Further simplifications should also be made, if possible; for example,
+// if Ben owes Reed 5.00€, and Sonia owes Ben 5.00, then Sonia should pay
+// Reed, because there is one less edge in the graph then.
 //
 // Edges in the graph that have a weight of 0.0 should be deleted from the
 // map, so that when we iterate over the map, we have the minimal number
 // of transactions right there.
-func simplifyGraph(g *graph) {
-	// Implementation notes: we modify the graph g, that's why it is a pointer.
-	// It doesn't really change the way you write this function though.
+func simplifyGraph(g graph) {
+	// Make sure there is only ever one edge between two nodes
+	for subj, others := range g {
+		for recv, sum := range others {
+			if sum < g[recv][subj] {
+				g[recv][subj] -= sum
+				delete(g[subj], recv)
+			}
+		}
+	}
+
+	// TODO: Try to remove edges if we can reroute the flow
 }
 
 // printTransactions iterates through the simplified graph and prints all
 // the edges contained in it as transactions from one person to another.
-func printTransactions(g *graph) {
+func printTransactions(g graph) {
 	fmt.Println("\nOUTSTANDING TRANSACTIONS:")
-	for subj, others := range *g {
+	for subj, others := range g {
+		if len(others) == 0 {
+			continue
+		}
 		fmt.Printf("%v must pay:\n", subj)
 		for recv, sum := range others {
 			fmt.Printf("    %.2f to %v\n", sum, recv)
