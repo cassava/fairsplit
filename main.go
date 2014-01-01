@@ -10,12 +10,55 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
 
+func usage() {
+	var eofSignal = "Ctrl-D"
+	if runtime.GOOS == "windows" {
+		eofSignal = "Ctrl-Z"
+	}
+
+	fmt.Printf(`Usage: %[1]s
+
+Fairsplit is a program to split expenses among a group of people.
+It takes a list of transactions from the standard input until EOF is
+encountered (which can be inserted with %[2]s on this operating system.)
+
+Transactions are entered by showing how money has flowed from one person on
+behalf of others. For example, the transaction
+
+    Ben 40.00 Ben Lila Carlos Emil
+
+means that Ben paid 40.00 of whatever currency on behalf of Ben, Lila, Carlos,
+and Emil, so that Lila, Carlos, and Emil each owe Ben 10.00.
+
+Fairsplit also minimizes the number of transactions, for example given the
+following input, only Sonia pays Reed anything:
+
+ > Ben 45.67 Ben Reed Sonia
+ > Reed 78 Sonia Ben
+ > Sonia 33.2 Sonia Ben Reed
+ > Ben 19.62 Sonia
+ > <%[2]s>
+
+OUTSTANDING TRANSACTIONS:
+Sonia must pay:
+    51.71 to Reed
+
+THANK YOU.
+`, os.Args[0], eofSignal)
+}
+
 func main() {
-	fmt.Println("Fairsplit – no one's cheating no one here.\n")
+	if len(os.Args) > 1 {
+		usage()
+		os.Exit(1)
+	}
+
+	fmt.Println("Fairsplit – no one's cheating no one here ;-)\n")
 	g := buildGraphInteractively()
 	printTransactions(g)
 }
@@ -85,9 +128,9 @@ spend money on behalf of those to the right of the sum.
 			continue
 		}
 
-		// Put the information in the graph
-		part := amount / float64(len(others)+1)
-		amends[subj] -= amount - part
+		// Put the information in the amends data-structure
+		part := amount / float64(len(others))
+		amends[subj] -= amount
 		for _, o := range others {
 			amends[o] += part
 		}
@@ -137,6 +180,10 @@ spend money on behalf of those to the right of the sum.
 // printTransactions iterates through the simplified graph and prints all
 // the edges contained in it as transactions from one person to another.
 func printTransactions(g graph) {
+	if len(g) == 0 {
+		fmt.Println("\nALL IS WELL.")
+		return
+	}
 	fmt.Println("\nOUTSTANDING TRANSACTIONS:")
 
 	for subj, others := range g {
@@ -149,4 +196,6 @@ func printTransactions(g graph) {
 		}
 		fmt.Println()
 	}
+
+	fmt.Println("THANK YOU.")
 }
