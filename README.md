@@ -22,7 +22,7 @@ following input, only Sonia pays Reed anything:
     > Reed 78 Sonia Ben
     > Sonia 33.2 Sonia Ben Reed
     > Ben 19.62 Sonia
-    > <%[2]s>
+    > <CTRL-D>
 
     OUTSTANDING TRANSACTIONS:
     Sonia must pay:
